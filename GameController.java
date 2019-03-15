@@ -22,7 +22,7 @@ public final class GameController
 	/// AI game-players.
 	private final AIModule[] players;
 	/// Time alloted to any AI per turn.
-	private final int AI_time;
+	private final int[] AI_time;
 
 	/// Primary Constructor.
 	/**
@@ -34,7 +34,7 @@ public final class GameController
 	 * @param players An array of two AIModules that will be pitted against each other.
 	 * @param AI_time Maximum amount of time alotted per AI move.
 	 */
-	public GameController(final GameStateModule game, final IOModule io, final AIModule[] players, final int AI_time)
+	public GameController(final GameStateModule game, final IOModule io, final AIModule[] players, final int[] AI_time)
 	{
 		assert players.length == 2 : "Should only have two players.";
 
@@ -64,8 +64,13 @@ public final class GameController
 				// If the player is human than make a move request
 				if(player == null)
 					tryMakeMove(io.getHumanMove());
-				else
-					callAI(player, "Player " + (i + 1));
+				else{
+					if (AI_time[i] > 0)
+						callAI(player, "Player " + (i + 1), AI_time[i]);
+					else
+						callAINoLimits(player);
+				}
+
 
 				// Update graphics
 				io.drawBoard(game);
@@ -89,7 +94,7 @@ public final class GameController
 				if(player == null)
 					tryMakeMove(io.getHumanMove());
 				else
-					trainAI(player);
+					callAINoLimits(player);
 
 				// Update graphics
 				if (draw_board == 1)
@@ -109,7 +114,7 @@ public final class GameController
 	 * @param AIName Label given to the AI.
 	 * @see AIModule
 	 */
-	private void callAI(final AIModule ai, final String AIName)
+	private void callAI(final AIModule ai, final String AIName, int AI_time)
 	{
 		// Make a duplicate GameStateModule to avoid any unwanted changes to the board
 		final GameStateModule duplicate = game.copy();
@@ -151,28 +156,13 @@ public final class GameController
 		tryMakeMove(move);
 	}
 
-	private void trainAI(final AIModule ai)
+	private void callAINoLimits(final AIModule ai)
 	{
 		// Make a duplicate GameStateModule to avoid any unwanted changes to the board
 		final GameStateModule duplicate = game.copy();
 		ai.getNextMove(duplicate);
 		int move = ai.chosenMove;
 		tryMakeMove(move);
-	}
-
-	public void print_2d_array(int[][] a){
-		for(int[] row : a){
-			System.out.println(Arrays.toString(row));
-		}
-	}
-
-
-	public void printboardString(String board){
-		System.out.println(board.substring(0, 4));
-		System.out.println(board.substring(4, 8));
-		System.out.println(board.substring(8, 12));
-		System.out.println(board.substring(12, 16));
-		System.out.println(board.substring(16, 20));
 	}
 
 	/// Attempts to make the given move, defaulting to an arbitrary move otherwise.
@@ -187,19 +177,6 @@ public final class GameController
 		// If the move is illegal, make some valid move and write to System.err
 		if(!game.canMakeMove(move))
 		{
-//			String currState = "";
-//			String reverseState = "";
-//			for(int i=0;i<game.getWidth();i++){
-//				// current state
-//				for(int j=0;j<game.getHeight();j++){
-//					currState += String.valueOf(game.getAt(i, j));
-////					reverseState += String.valueOf(game.getAt(game.getWidth() - i - 1, j));
-//				}
-//			}
-//			printboardString(currState);
-//			mctsAI.Stats stats = mctsAI.stateStats.get(currState);
-//			for (int a : stats.legalActions)
-//				System.out.println(a);
 			for(int j = 0; j < game.getWidth(); j++)
 				if(game.canMakeMove(j))
 				{
@@ -212,11 +189,6 @@ public final class GameController
 		}
 		else{
 			game.makeMove(move);
-
-
-//			System.out.println("move:" + move);
-//			System.out.println(currState);
-//			System.out.println(reverseState);
 		}
 
 	}

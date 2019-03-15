@@ -76,7 +76,7 @@ public class Main
 		final AIModule[] players = new AIModule[2];
 
 		// Default max ai time is 500 ms
-		int AI_time = 500;
+		int[] AI_time = new int[2];
 		// Default width to 7
 		int width = 7;
 		// Default height to 6
@@ -102,10 +102,16 @@ public class Main
 						players[1] = new QLearnerAI(0);
 					}else
 						players[1] = (AIModule) Class.forName(args[i + 1]).newInstance();
-				else if(args[i].equalsIgnoreCase("-t"))
+				else if(args[i].equalsIgnoreCase("-t1"))
 				{
-					AI_time = Integer.parseInt(args[i + 1]);
-					if(AI_time <= 0)
+					AI_time[0] = Integer.parseInt(args[i + 1]);
+					if(AI_time[0] <= 0)
+						throw new IllegalArgumentException("AI think time must be positive");
+				}
+				else if(args[i].equalsIgnoreCase("-t2"))
+				{
+					AI_time[1] = Integer.parseInt(args[i + 1]);
+					if(AI_time[1] <= 0)
 						throw new IllegalArgumentException("AI think time must be positive");
 				}
 				else if(args[i].equalsIgnoreCase("-w"))

@@ -98,8 +98,6 @@ public class Main_QLearning
 
         final AIModule[] players = new AIModule[2];
 
-        // Default max ai time is 500 ms
-        int AI_time = 500;
         // Default width to 7
         int width = 7;
         // Default height to 6
@@ -119,13 +117,8 @@ public class Main_QLearning
 
             while(i < args.length)
             {
-                if(args[i].equalsIgnoreCase("-t"))
-                {
-                    AI_time = Integer.parseInt(args[i + 1]);
-                    if(AI_time <= 0)
-                        throw new IllegalArgumentException("AI think time must be positive");
-                }
-                else if(args[i].equalsIgnoreCase("-w"))
+
+                if(args[i].equalsIgnoreCase("-w"))
                 {
                     width = Integer.parseInt(args[i + 1]);
                     if(width < 4)
@@ -227,7 +220,7 @@ public class Main_QLearning
         for(int e=0;e<max_eps;e++){
             System.out.println("Self-play Game " + (e + 1));
             game = new GameState_General(width, height);
-            GameController controller = new GameController(game, io, players, AI_time);
+            GameController controller = new GameController(game, io, players, null);
             controller.self_play(print_board);
             if(game.getWinner() == 0)
                 System.out.println("Draw Game");
@@ -236,11 +229,16 @@ public class Main_QLearning
             }
         }
         try{
-
             File dir = new File("qtables");
             if (!dir.exists()){
                 dir.mkdir();
             }
+            BufferedWriter[] writers = new BufferedWriter[width * height + 1];
+
+            for(int i = 0; i < width * height + 1; i++){
+                writers[i] = new BufferedWriter(new FileWriter(new File("qtables/" + i + ".txt")));
+            }
+
             for(String state : QLearnerAI.state_action_values.keySet()){
                 int nonzeros = 0;
                 for (int i=0;i<state.length();i++){
@@ -248,15 +246,15 @@ public class Main_QLearning
                         nonzeros += 1;
                 }
 
-                File f = new File("qtables/" + nonzeros + ".txt");
-                BufferedWriter bw = new BufferedWriter(new FileWriter(f, true));
                 String[] values = QLearnerAI.state_action_values.get(state);
                 String buffer = state + ":";
                 for(String v : values){
                     buffer += v + " ";
                 }
-                bw.write(buffer + "\n");
-                bw.close();
+                writers[nonzeros].write(buffer + "\n");
+            }
+            for(int i = 0; i <= width * height; i++){
+                writers[i].close();
             }
 
         }catch (Exception exc){

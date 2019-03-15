@@ -36,13 +36,13 @@ public class QLearnerAI extends AIModule {
     public void getNextMove(GameStateModule game) {
         if (is_training == 1) {
             Board curr_board = getStateActionValues(game);
-            seedQTableAtTraining(game,curr_board);
+            //seedQTableAtTraining(game,curr_board);
             chosenMove = selectMove(curr_board.legalActions, curr_board.q_values);
             updateQTable(game, curr_board);
         } else {
             try {
                 Board curr_board = getStateActionValuesFromFile(game);
-                curr_board.q_values = seedQTable(game,curr_board);
+                //curr_board.q_values = seedQTable(game,curr_board);
                 chosenMove = selectMove(curr_board.legalActions, curr_board.q_values);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -115,12 +115,32 @@ public class QLearnerAI extends AIModule {
 
 
     private int selectMove(ArrayList<Integer> legalActions, String[] q_values) {
-        if (is_training == 1) {
+        /* Tianyang exploring his sexual orientation randomly 
+		if (is_training == 1) {
             if (Math.random() < epsilon) {
                 Random rand = new Random();
                 return legalActions.get(rand.nextInt(legalActions.size()));
             }
-        }
+        } */
+
+		/* Vincent exploring his sexual orientation with probabilities and weights given states */
+		if (is_training == 1) {
+			double totalProb = 0;
+			double k = Math.E; // k has to be strictly greater than 0
+	    	for(int i = 0; i < legalActions.size(); i++) {
+				totalProb += Math.pow(k, Double.parseDouble(q_values[legalActions.get(i)]));
+			}
+			int count = 0;
+			double cummulativeProb = 0.0;
+			double rand = Math.random(); //between [0, 1)
+			while(count < legalActions.size()){ 
+				cummulativeProb += (Math.pow(k, Double.parseDouble(q_values[legalActions.get(count)])) / totalProb);
+            	if ((rand < cummulativeProb) || (count == legalActions.size()-1)) { //so we use <
+                	return legalActions.get(count);
+				}
+				count++;
+            }
+        } 
 
         Random rand1 = new Random();
         int action = legalActions.get(rand1.nextInt(legalActions.size()));
@@ -146,9 +166,9 @@ public class QLearnerAI extends AIModule {
             if (game.getWinner() != 0) //win
                 reward = 1000;
             else //draw
-                reward = 0;
+                reward = 300;
 
-            epsilon *= 0.999999;
+            epsilon *= 0.99999995; // 8 for 2M, 95 for 10M
 
         } else {
             Board next_board = getStateActionValues(game);
@@ -158,7 +178,10 @@ public class QLearnerAI extends AIModule {
                 if (game.getWinner() != 0) //win
                     reward = -1000;
                 else //draw
-                    reward = 0;
+                    reward = 300;
+            }
+            else {
+                //reward = eval(game);
             }
             Board new_board = getStateActionValues(game);
             String sprime = new_board.state;
@@ -190,51 +213,410 @@ public class QLearnerAI extends AIModule {
             game.makeMove(curr_board.legalActions.get(i));
             if (game.isGameOver() && game.getWinner() != 0) {
                 state_action_values.get(curr_board.state)[curr_board.legalActions.get(i)] = Double.toString(1000.0);//seed +1000
+                //System.out.println("Seeded direct win");
                 game.unMakeMove();
                 break;
             }
             Board next_board = getStateActionValues(game);
+            Boolean garuanteedWin = true;
+            Boolean garuanteedLose = false;
             for (int j = 0; j < next_board.legalActions.size(); j++) {
                 game.makeMove(next_board.legalActions.get(j));
+                
+                Boolean winExist = false;
+                
                 if (game.isGameOver() && game.getWinner() != 0) {
                     state_action_values.get(curr_board.state)[curr_board.legalActions.get(i)] = Double.toString(-1000.0);//seed -1000
+                    //System.out.println("Seeded direct lose");
+                    garuanteedWin = false;
+                    garuanteedLose = false;
                     game.unMakeMove();
                     break;
+                }else{
+                    // ******************* Seeding Garuanteed Win *********************
+                    Board board = getStateActionValues(game);
+                    Boolean loseable = true;
+                    for (int k = 0; k < board.legalActions.size(); k++) {
+                        game.makeMove(board.legalActions.get(k));
+                        if (game.isGameOver() && game.getWinner() != 0) {
+                            winExist = true;
+                            loseable = false;
+                            game.unMakeMove();
+                            break;
+                        }
+                        Board nboard = getStateActionValues(game);
+                        Boolean loseExist = false;
+                        for (int l = 0; l < nboard.legalActions.size(); l++) {
+                            game.makeMove(nboard.legalActions.get(l));
+                            if (game.isGameOver() && game.getWinner() != 0) {
+                                loseExist = true;
+                                game.unMakeMove();
+                                break;
+                            }
+                            game.unMakeMove();
+                        }
+                        game.unMakeMove();
+                        
+                        if(!loseExist)
+                            loseable = false;
+                    }
+                    
+                    if(loseable){
+                        garuanteedLose = true;
+                    }
+                    
                 }
                 game.unMakeMove();
+                
+                if(!winExist)
+                    garuanteedWin = false;
+                
+                // *********************************************************************
             }
             game.unMakeMove();
+            
+            if(garuanteedWin){
+                state_action_values.get(curr_board.state)[curr_board.legalActions.get(i)] = Double.toString(999.5);
+                //System.out.println("Seeded garuanteed win");
+            }
+            
+            if(garuanteedLose){
+                state_action_values.get(curr_board.state)[curr_board.legalActions.get(i)] = Double.toString(-1000);
+                //System.out.println("Seeded garuanteed lose");
+            }
+            
         }
     }
     
     private String[] seedQTable(GameStateModule game, Board curr_board) {
         if(curr_board.state.equals("00000000000000000000")){
             curr_board.q_values[2] = Double.toString(1000.0);
-            System.out.println("Seed");
         }
         
         for (int i = 0; i < curr_board.legalActions.size(); i++) {
-                game.makeMove(curr_board.legalActions.get(i));
+            game.makeMove(curr_board.legalActions.get(i));
+            if (game.isGameOver() && game.getWinner() != 0) {
+                curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(1000.0);//seed +1000
+                System.out.println("Seeded direct win");
+		System.out.println(curr_board.legalActions.get(i));
+		System.out.println(Arrays.toString(curr_board.q_values));
+                game.unMakeMove();
+                break;
+            }
+            Board next_board = getStateActionValues(game);
+            Boolean garuanteedWin = true;
+            Boolean garuanteedLose = false;
+            //Boolean garuanteedLose = true;
+            for (int j = 0; j < next_board.legalActions.size(); j++) {
+                game.makeMove(next_board.legalActions.get(j));
+                
+                Boolean winExist = false;
+                
                 if (game.isGameOver() && game.getWinner() != 0) {
-                    curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(1000.0);//seed +1000
+                    curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(-1000.0);//seed -1000
+                    System.out.println("Seeded direct lose");
+		    System.out.println(curr_board.legalActions.get(i));
+                    garuanteedWin = false;
+                    garuanteedLose = false;
                     game.unMakeMove();
                     break;
-                }
-                Board next_board = getStateActionValues(game);
-                for (int j = 0; j < next_board.legalActions.size(); j++) {
-                        game.makeMove(next_board.legalActions.get(j));
+                }else{
+                    // ******************* Seeding Garuanteed Win *********************
+                    Board board = getStateActionValues(game);
+                    Boolean loseable = true;
+                    for (int k = 0; k < board.legalActions.size(); k++) {
+                        game.makeMove(board.legalActions.get(k));
                         if (game.isGameOver() && game.getWinner() != 0) {
-                            curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(-1000.0);//seed -1000
+                            winExist = true;
+                            loseable = false;
                             game.unMakeMove();
                             break;
                         }
+                        Board nboard = getStateActionValues(game);
+                        Boolean loseExist = false;
+                        for (int l = 0; l < nboard.legalActions.size(); l++) {
+                            game.makeMove(nboard.legalActions.get(l));
+                            if (game.isGameOver() && game.getWinner() != 0) {
+                                loseExist = true;
+                                game.unMakeMove();
+                                break;
+                            }
+                            game.unMakeMove();
+                        }
                         game.unMakeMove();
+                        
+                        if(!loseExist)
+                            loseable = false;
+                    }
+                    
+                    if(loseable){
+                        garuanteedLose = true;
+                    }
+                    
                 }
                 game.unMakeMove();
+                
+                if(!winExist)
+                    garuanteedWin = false;
+                
+                // *********************************************************************
+            }
+            game.unMakeMove();
+            
+            if(garuanteedWin){
+                curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(999.5);
+                System.out.println("Seeded garuanteed win");
+		System.out.println(curr_board.legalActions.get(i));
+            }
+            
+            if(garuanteedLose){
+                curr_board.q_values[curr_board.legalActions.get(i)] = Double.toString(-1000);
+                System.out.println("Seeded garuanteed lose at");
+                System.out.println(curr_board.legalActions.get(i));
+            }
+            
         }
         return curr_board.q_values;
     }
+    
+    //Part 3
+    //Evaluate the reward for the state before our action.
+    
+    private double eval(final GameStateModule game) {
+        int player = game.getActivePlayer();
+        int ourScore = 6*(threeInCol(game, player) + threeInRow(game, player) + threeInPos(game, player) + threeInNeg(game, player))
+        + 3*(twoInCol(game, player) + twoInRow(game, player) + twoInPos(game, player) + twoInNeg(game, player));
+        int theirScore = 7*(threeInCol(game, 2/player) + threeInRow(game, 2/player) + threeInPos(game, 2/player) + threeInNeg(game, 2/player))
+        + 4*(twoInCol(game, 2/player) + twoInRow(game, 2/player) + twoInPos(game, 2/player) + twoInNeg(game, 2/player));
+        return ourScore - theirScore;
+    }
+    
+    private int twoInCol(final GameStateModule game, int player) {
+        int count = 0;
+        for(int i = 0; i < game.getWidth(); i++) {
+            if(game.getHeight() == 4) {
+                int j = 0; //Anything above this will not be able to make 4 in a column
+                if((game.getAt(i, j) == player) && (game.getAt(i, j+1) == player) && (game.getAt(i, j+2) == 0))
+                    count++;
+            }
+            else { //for 6x5
+                for(int j = 0; j < 1; j++) {
+                    if((game.getAt(i, j) == player) && (game.getAt(i, j+1) == player) && (game.getAt(i, j+2) == 0))
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
+    
+    //Evaluate number of open three in a columns
+    private int threeInCol(final GameStateModule game, int player) {
+        int count = 0;
+        for(int i = 0; i < game.getWidth(); i++) {
+            if(game.getHeight() == 4) { //for 5x4
+                int j = 0;
+                if((game.getAt(i, j) == player) && (game.getAt(i, j+1) == player) && (game.getAt(i, j+2) == player) && game.getAt(i, j+3) == 0)
+                    count++;
+            }
+            else { //for 6x5
+                for(int j = 0; j < 2; j++) {
+                    if((game.getAt(i, j) == player) && (game.getAt(i, j+1) == player) && (game.getAt(i, j+2) == player) && game.getAt(i, j+3) == 0)
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
+    
+    //Evaluate number of open two in a rows
+    private int twoInRow(final GameStateModule game, int player) {
+        int count = 0;
+        int maxHeight = 0;
+        for(int i = 0; i < game.getWidth(); i++) {
+            maxHeight = game.getHeightAt(i);
+        }
+        for(int i = 0; i < 3; i++) { //left to right
+            for (int j = 0; j < maxHeight;j++){
+                if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j) == player) && (game.getAt(i + 2, j) == 0))
+                    count++;
+            }
+        }
+        for(int i = game.getWidth()-1; i > 2; i--) { //right to left
+            for(int j = 0; j < maxHeight; j++) {
+                if((game.getAt(i,j) == player) && (game.getAt(i-1,j) == player) && (game.getAt(i-2,j) == 0))
+                    count++;
+            }
+        }
+        return count;
+        
+    }
+    
+    //Evaluate number of open three in a rows
+    private int threeInRow(final GameStateModule game, int player) {
+        int count = 0;
+        int maxHeight = 0;
+        for(int i = 0; i < game.getWidth(); i++){
+            if(game.getHeightAt(i) > maxHeight)
+                maxHeight = game.getHeightAt(i);
+        }
+        for(int i = 0; i < Math.floor(game.getWidth()/2); i++) { //left to right
+            for(int j = 0; j < maxHeight; j++) {
+                if((game.getAt(i,j) == player) && (game.getAt(i+1,j) == player) && (game.getAt(i+2,j) == player) &&(game.getAt(i+3,j) == 0))
+                    count++;
+            }
+        }
+        for(int i = game.getWidth()-1; i > Math.ceil(game.getWidth()/2); i--) { //right to left
+            for(int j = 0; j < maxHeight; j++) {
+                if((game.getAt(i,j) == player) && (game.getAt(i-1,j) == player) && (game.getAt(i-2,j) == player) &&(game.getAt(i-3,j) == 0))
+                    count++;
+            }
+        }
+        return count;
+    }
+    
+    //Evaluate number of open two in a / diagonal
+    private int twoInPos(final GameStateModule game, int player) {
+        int count = 0;
+        if(game.getHeight() == 4){ //if height is 4, no iterations needed
+            //counting bottom up
+            for(int i = 0; i < 3; i++) { //since rows is always of width 5
+                for(int j = 0; j < 2; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j + 1) == player) && (game.getAt(i + 2, j + 2) == 0))
+                        count++;
+                }
+            }
+            //counting top bottom
+            for(int i = 4; i > 1; i--) {
+                for(int j = 3; j > 1; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j - 1) == player) && (game.getAt(i - 2, j - 2) == 0))
+                        count++;
+                }
+            }
+        }
+        else { //if height is 5, iterations needed
+            for(int i = 0; i < 4; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j + 1) == player) && (game.getAt(i + 2, j + 2) == 0))
+                        count++;
+                }
+            }
+            for(int i = 5; i > 1; i--) {
+                for (int j = 4; j > 1; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j - 1) == player) && (game.getAt(i - 2, j - 2) == 0))
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
 
-
+    
+    //Evaluate number of open diagonals in the positive slope /
+    private int threeInPos(final GameStateModule game, int player) {
+        int count = 0;
+        if(game.getHeight() == 4){ //if height is 4, no iterations needed
+            //counting bottom up
+            for(int i = 0; i < 2; i++) {
+                for(int j = 0; j < 1; j++) {
+                    if((game.getAt(i,j) == player) && (game.getAt(i+1,j+1) == player) && (game.getAt(i+2,j+2) == player) && (game.getAt(i+3,j+3) == 0))
+                        count++;
+                }
+            }
+            //counting top bottom
+            for(int i = 4; i > 2; i--) {
+                for(int j = 3; j > 2; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j-1) == player) && (game.getAt(i - 2, j-2) == player) && (game.getAt(i - 3, j-3) == 0))
+                        count++;
+                }
+            }
+        }
+        else { //if height is 5, iterations needed
+            for(int i = 0; i < 3; i++) {
+                for (int j = 0; j < 2; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j + 1) == player) && (game.getAt(i + 2, j + 2) == player) && (game.getAt(i+3, j+3) == 0))
+                        count++;
+                }
+            }
+            for(int i = 5; i > 2; i--) {
+                for (int j = 4; j > 2; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j - 1) == player) && (game.getAt(i - 2, j - 2) == player) && (game.getAt(i-3,j-3) == 0))
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
+    
+    //Evaluate two in an open negative slope
+    private int twoInNeg (final GameStateModule game, int player) {
+        int count = 0;
+        if(game.getHeight() == 4){ //if height is 4, no iterations needed
+            //counting bottom up
+            for(int i = 0; i < 3; i++) { //since rows is always of width 5
+                for(int j = 3; j > 1; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j - 1) == player) && (game.getAt(i + 2, j - 2) == 0))
+                        count++;
+                }
+            }
+            //counting top bottom
+            for(int i = 4; i > 1; i--) {
+                for(int j = 0; j < 2; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j + 1) == player) && (game.getAt(i - 2, j + 2) == 0))
+                        count++;
+                }
+            }
+        }
+        else { //if height is 5, iterations needed
+            for(int i = 0; i < 4; i++) {
+                for (int j = 4; j > 1; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j - 1) == player) && (game.getAt(i + 2, j - 2) == 0))
+                        count++;
+                }
+            }
+            for(int i = 5; i > 1; i--) {
+                for (int j = 0; j < 3; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j + 1) == player) && (game.getAt(i - 2, j + 2) == 0))
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
+    
+    
+    //Evaluate number of open diagonals in the negative slope
+    private int threeInNeg(final GameStateModule game, int player) {
+    int count = 0;
+        if(game.getHeight() == 4){ //if height is 4, no iterations needed
+            //counting bottom up
+            for(int i = 0; i < 2; i++) { //since rows is always of width 5
+                for(int j = 3; j > 2; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j - 1) == player) && (game.getAt(i + 2, j - 2) == player) && (game.getAt(i+3,j-3) == 0))
+                        count++;
+                }
+            }
+            //counting top bottom
+            for(int i = 4; i > 2; i--) {
+                for(int j = 0; j < 1; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j + 1) == player) && (game.getAt(i - 2, j + 2) == player) && (game.getAt(i-3, j+3) == 0))
+                        count++;
+                }
+            }
+        }
+        else { //if height is 5, iterations needed
+            for(int i = 0; i < 3; i++) {
+                for (int j = 4; j > 1; j--) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i + 1, j - 1) == player) && (game.getAt(i + 2, j - 2) == player) && (game.getAt(i+3,j-3) == 0))
+                        count++;
+                }
+            }
+            for(int i = 5; i > 2; i--) {
+                for (int j = 0; j < 2; j++) {
+                    if ((game.getAt(i, j) == player) && (game.getAt(i - 1, j + 1) == player) && (game.getAt(i - 2, j + 2) == player) && (game.getAt(i-3, j+3) == 0))
+                        count++;
+                }
+            }
+        }
+        return count;
+    }
 }
-
